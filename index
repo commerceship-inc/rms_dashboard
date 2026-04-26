@@ -73,9 +73,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .yoy-up{color:var(--green);font-size:11px;font-weight:700}
 .yoy-dn{color:var(--red);font-size:11px;font-weight:700}
 .yoy-nt{color:var(--text3);font-size:11px}
-#dz{border:2px dashed var(--border);border-radius:10px;padding:32px 20px;text-align:center;cursor:pointer;background:#FAFBFF;margin-bottom:12px;transition:all .2s}
-#dz:hover,#dz.ov{border-color:var(--blue);background:var(--blue-l)}
-#dz.ok{border-color:var(--green);background:#F0FDF4}
+#dz,#dz-csv{border:2px dashed var(--border);border-radius:10px;padding:32px 20px;text-align:center;cursor:pointer;background:#FAFBFF;margin-bottom:12px;transition:all .2s}
+#dz:hover,#dz.ov,#dz-csv:hover,#dz-csv.ov{border-color:var(--blue);background:var(--blue-l)}
+#dz.ok,#dz-csv.ok{border-color:var(--green);background:#F0FDF4}
+#dz.err,#dz-csv.err{border-color:var(--red);background:#FEF2F2}
 .dz-ico{font-size:28px;margin-bottom:10px}
 .dz-ttl{font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px}
 .dz-sub{font-size:11px;color:var(--text3)}
@@ -332,6 +333,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   <div class="tab" onclick="goTab(17)">RPPブランド分析</div>
   <div class="tab" onclick="goTab(9)">RPP 商品別</div>
   <div class="tab" onclick="goTab(10)">RPPキーワード別</div>
+  <div class="tab" onclick="goTab(23)">RPPキーワード（一般・指名）</div>
   <div class="tab" onclick="goTab(15)">RPP種別分析</div>
   <div class="tab" onclick="goTab(21)">RPP商品種別</div>
   <div class="tab" onclick="goTab(11)">メルマガ分析</div>
@@ -343,6 +345,39 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 
 <!-- PAGE 0: 月次KPI推移 -->
 <div class="pg on" id="pg0">
+
+  <!-- クイックアップロードバー -->
+  <div id="p0-upload-bar" style="margin-bottom:12px">
+    <!-- データ未読み込み時：大きなドロップゾーン -->
+    <!-- hidden input はdropzone外に配置して2重発火を防ぐ -->
+    <input type="file" id="p0-file-inp" accept=".xlsx,.xlsm,.csv" multiple style="display:none"
+      onchange="_p0HandleDrop(this.files)">
+    <div id="p0-dropzone"
+      style="border:2px dashed var(--border);border-radius:10px;padding:32px 20px;text-align:center;cursor:pointer;background:#fff;transition:border-color .2s,background .2s"
+      onclick="document.getElementById('p0-file-inp').click()"
+      ondragover="event.preventDefault();this.style.borderColor='var(--blue)';this.style.background='var(--blue-lt)'"
+      ondragleave="this.style.borderColor='var(--border)';this.style.background='#fff'"
+      ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='#fff';_p0HandleDrop(event.dataTransfer.files)">
+      <div style="font-size:28px;margin-bottom:8px">📂</div>
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">XLSXまたはCSVをドロップ</div>
+      <div style="font-size:11px;color:var(--text3)">クリックして選択、またはファイルをここにドラッグ＆ドロップ</div>
+    </div>
+    <!-- データ読み込み済み時：コンパクトバー -->
+    <div id="p0-loaded-bar" style="display:none;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 16px;display:none;align-items:center;justify-content:space-between;gap:12px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
+        <span style="color:var(--green);font-size:14px">✓</span>
+        <span id="p0-loaded-name" style="font-weight:600;color:var(--text)"></span>
+        <span id="p0-loaded-count" style="color:var(--text3)"></span>
+      </div>
+      <button onclick="document.getElementById('p0-file-inp2').click()"
+        style="padding:5px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text2);font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap">
+        別ファイルを読み込む
+      </button>
+      <input type="file" id="p0-file-inp2" accept=".xlsx,.xlsm,.csv" multiple style="display:none"
+        onchange="_p0HandleDrop(this.files)">
+    </div>
+  </div>
+
   <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
     <div id="p0-rng" style="width:260px"></div>
   </div>
@@ -354,6 +389,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div class="sec col1"><div class="sec-title" style="color:#3b82f6">アクセス人数</div><div style="height:220px"><canvas id="c-acc"></canvas></div></div>
     <div class="sec col1"><div class="sec-title" style="color:#10B981">転換率</div><div style="height:220px"><canvas id="c-cvr"></canvas></div></div>
     <div class="sec col1"><div class="sec-title" style="color:#0e9980">客単価</div><div style="height:220px"><canvas id="c-aov"></canvas></div></div>
+  </div>
+  <!-- 月次KPI テーブル -->
+  <div class="sec" style="padding:0;overflow:hidden;margin-top:4px">
+    <div style="padding:12px 20px;border-bottom:1px solid var(--border)">
+      <div class="sec-title">月次 KPI 一覧</div>
+    </div>
+    <div class="tbl-wrap" style="max-height:400px;overflow-y:auto">
+      <table class="dtbl" id="tbl-p0-kpi"></table>
+    </div>
   </div>
 </div>
 
@@ -862,6 +906,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       </table>
     </div>
   </div>
+
   <!-- グラフ表示年ボタン -->
   <div class="sec" style="padding:8px 14px;margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -922,6 +967,112 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   </div>
 
 </div>
+
+<!-- PAGE 23: RPPキーワード（一般・指名キーワード別） -->
+<div class="pg" id="pg23">
+
+  <!-- コントロール -->
+  <div class="ctrl" style="flex-wrap:wrap;gap:8px">
+    <div class="ctrl-group"><label>基準年</label>
+      <select id="kw23-base-year" onchange="renderRppKw23()"></select>
+    </div>
+    <div class="ctrl-group"><label>基準月</label>
+      <select id="kw23-base-month" onchange="renderRppKw23()"></select>
+    </div>
+    <div class="ctrl-group"><label>比較年</label>
+      <select id="kw23-cmp-year" onchange="renderRppKw23()"></select>
+    </div>
+    <div class="ctrl-group"><label>比較月</label>
+      <select id="kw23-cmp-month" onchange="renderRppKw23()"></select>
+    </div>
+  </div>
+
+  <!-- 指名語句設定 -->
+  <div class="sec" style="padding:10px 18px;margin-bottom:12px;background:var(--blue-lt);border-top:3px solid var(--blue)">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap">指名キーワード語句</span>
+      <input id="kw23-brand-terms" type="text" placeholder="ブランド名をカンマ区切りで入力"
+        style="flex:1;min-width:260px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff"
+        oninput="renderRppKw23()">
+      <span style="font-size:11px;color:var(--text3)">入力語句を含む → 指名に分類</span>
+    </div>
+  </div>
+
+  <!-- 一般KW 商品絞り込み -->
+  <div class="sec" style="padding:12px 18px;margin-bottom:12px;border-top:3px solid #3B82F6">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:700;color:#3B82F6;white-space:nowrap">一般KW 商品選択</span>
+      <!-- プルダウントリガーボタン -->
+      <div style="position:relative" id="kw23-prod-dropdown-wrap">
+        <button id="kw23-prod-trigger" onclick="_rk23ToggleProdDropdown()"
+          style="display:flex;align-items:center;gap:6px;padding:5px 14px;border:1px solid #3B82F6;border-radius:6px;background:#fff;color:#1D4ED8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;min-width:180px;justify-content:space-between">
+          <span id="kw23-prod-trigger-label">商品を選択…</span>
+          <span id="kw23-prod-trigger-arrow" style="font-size:9px;color:var(--text3)">▼</span>
+        </button>
+        <!-- ドロップダウンパネル -->
+        <div id="kw23-prod-panel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:320px;max-width:520px;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.12);z-index:100;overflow:hidden">
+          <!-- ヘッダー -->
+          <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg)">
+            <span style="font-size:11px;color:var(--text2);font-weight:600">商品を選択（複数可）</span>
+            <div style="display:flex;gap:6px">
+              <button onclick="_rk23SelectAllProds(true)"
+                style="padding:2px 8px;border-radius:4px;border:1px solid #3B82F6;background:#3B82F6;color:#fff;font-size:10px;cursor:pointer;font-family:inherit">全選択</button>
+              <button onclick="_rk23SelectAllProds(false)"
+                style="padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:#fff;color:var(--text2);font-size:10px;cursor:pointer;font-family:inherit">全解除</button>
+            </div>
+          </div>
+          <!-- チェックボックスリスト -->
+          <div id="kw23-prod-checkboxes" style="max-height:220px;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:2px"></div>
+        </div>
+      </div>
+      <span style="font-size:11px;color:var(--text3)">集計に含める商品を選択（複数可）</span>
+    </div>
+  </div>
+
+  <!-- メインテーブル -->
+  <div class="sec" style="padding:0;overflow:hidden;margin-bottom:12px">
+    <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <div class="sec-title">キーワード一覧（行クリックで期間別詳細を表示）</div>
+      <div style="font-size:11px;color:var(--text3)">
+        <span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px">
+          <span style="width:10px;height:10px;background:#3B82F6;border-radius:2px;display:inline-block"></span>一般
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:4px">
+          <span style="width:10px;height:10px;background:#F59E0B;border-radius:2px;display:inline-block"></span>指名
+        </span>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="dtbl" id="tbl-rpp-kw23-wrap">
+        <thead>
+          <tr id="kw23-thead-r1"></tr>
+          <tr id="kw23-thead-r2"></tr>
+        </thead>
+        <tbody id="tbl-rpp-kw23"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- グラフ選択中ラベル -->
+  <div style="padding:6px 4px;margin-bottom:4px;font-size:12px;color:var(--text2)">
+    グラフ表示中：<strong id="rk23-chart-label" style="color:var(--blue);font-family:'IBM Plex Mono',monospace">—（合計行をクリックして選択）</strong>
+  </div>
+
+  <!-- 8チャート -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
+    <div class="sec" style="padding:16px"><div class="sec-title" style="font-size:11px">売上推移</div><div style="height:150px;margin-top:10px"><canvas id="rk23-kw-rev"></canvas></div></div>
+    <div class="sec" style="padding:16px"><div class="sec-title" style="font-size:11px">ROAS推移</div><div style="height:150px;margin-top:10px"><canvas id="rk23-kw-roas"></canvas></div></div>
+    <div class="sec" style="padding:16px"><div class="sec-title" style="font-size:11px">広告費</div><div style="height:150px;margin-top:10px"><canvas id="rk23-kw-cost"></canvas></div></div>
+    <div class="sec" style="padding:16px"><div class="sec-title" style="font-size:11px">注文獲得単価</div><div style="height:150px;margin-top:10px"><canvas id="rk23-kw-cpa"></canvas></div></div>
+    <div class="sec" style="padding:16px"><div class="sec-title" style="font-size:11px">クリック数</div><div style="height:150px;margin-top:10px"><canvas id="rk23-kw-click"></canvas></div></div>
+    <div class="sec" style="padding:16px"><div class="sec-title" style="font-size:11px">CTR</div><div style="height:150px;margin-top:10px"><canvas id="rk23-kw-ctr"></canvas></div></div>
+    <div class="sec" style="padding:16px"><div class="sec-title" style="font-size:11px">CVR</div><div style="height:150px;margin-top:10px"><canvas id="rk23-kw-cvr"></canvas></div></div>
+    <div class="sec" style="padding:16px"><div class="sec-title" style="font-size:11px">CPC推移</div><div style="height:150px;margin-top:10px"><canvas id="rk23-kw-cpc"></canvas></div></div>
+  </div>
+  <div id="rk23-kw-legend" style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--text2);padding:0 4px"></div>
+
+</div>
+
 
 <div class="pg" id="pg21">
   <!-- コントロール -->
@@ -1135,7 +1286,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 <div class="pg" id="pg14">
   <div class="ctrl">
     <div class="ctrl-group"><label>基準年月</label>
-      <select id="rppcat-base" onchange="renderRppCat()"></select>
+      <select id="rppcat-base" onchange="syncRppCatCmp();renderRppCat()"></select>
     </div>
     <div class="ctrl-group"><label>比較年月</label>
       <select id="rppcat-cmp" onchange="renderRppCat()"></select>
@@ -1398,27 +1549,45 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         <div class="sec col1">
           <div class="sec-title">XLSXファイル読み込み</div>
           <div class="sec-sub">RMS分析シートのXLSXをドロップ</div>
-          <div id="dz" onclick="document.getElementById('xl-inp2').click()">
-            <div class="dz-ico" id="dz-ico"></div>
+          <input type="file" id="xl-inp2" accept=".xlsx,.xlsm" style="display:none"
+            onchange="loadXL(this.files[0]);this.value=''">
+          <div id="dz"
+            onclick="document.getElementById('xl-inp2').click()"
+            ondragover="event.preventDefault();this.classList.add('ov')"
+            ondragleave="this.classList.remove('ov')"
+            ondrop="event.preventDefault();this.classList.remove('ov');loadXL(event.dataTransfer.files[0])">
+            <div class="dz-ico" id="dz-ico">📊</div>
             <div class="dz-ttl" id="dz-ttl">XLSXファイルをドロップ</div>
             <div class="dz-sub" id="dz-sub">またはクリックして選択</div>
           </div>
-          <input type="file" id="xl-inp2" accept=".xlsx,.xlsm" style="display:none" onchange="loadXL(this.files[0])">
           <div class="info blue" style="margin-top:8px;font-size:11px">読込: <strong id="xl-file">未読み込み</strong></div>
           <div id="sheet-tabs" style="margin-top:8px"></div>
         </div>
         <div class="sec col1">
           <div class="sec-title">CSVファイル読み込み</div>
           <div class="sec-sub">RMSからエクスポートしたCSVを追加読み込み（複数可）</div>
-          <div id="dz-csv" onclick="document.getElementById('csv-inp').click()">
-            <div class="dz-ico" id="csv-ico"></div>
-            <div class="dz-ttl" id="csv-ttl">CSVファイルをドロップ</div>
-            <div class="dz-sub" id="csv-sub">複数ファイル同時読み込み対応</div>
+          <input type="file" id="csv-inp" accept=".csv" multiple style="display:none"
+            onchange="_dzCsvLoad(this.files)">
+          <!-- ドロップゾーン（インラインスタイルで確実に表示） -->
+          <div id="dz-csv"
+            style="border:2px dashed #DDE3EE;border-radius:10px;padding:24px 20px;text-align:center;cursor:pointer;background:#FAFBFF;margin-bottom:12px;transition:all .2s"
+            onclick="document.getElementById('csv-inp').click()"
+            ondragover="event.preventDefault();this.style.borderColor='#1462D4';this.style.background='#EBF2FF'"
+            ondragleave="this.style.borderColor='#DDE3EE';this.style.background='#FAFBFF'"
+            ondrop="event.preventDefault();this.style.borderColor='#DDE3EE';this.style.background='#FAFBFF';_dzCsvLoad(event.dataTransfer.files)">
+            <div style="font-size:28px;margin-bottom:8px" id="csv-ico">📄</div>
+            <div style="font-size:13px;font-weight:700;color:#1A2340;margin-bottom:4px" id="csv-ttl">CSVファイルをドロップ</div>
+            <div style="font-size:11px;color:#8696B5;margin-bottom:14px" id="csv-sub">またはボタンをクリックして選択（複数ファイル可）</div>
+            <button type="button"
+              style="padding:8px 24px;border-radius:7px;border:none;background:#1462D4;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit"
+              onclick="event.stopPropagation();document.getElementById('csv-inp').click()">
+              CSVファイルを選択
+            </button>
           </div>
-          <input type="file" id="csv-inp" accept=".csv" multiple style="display:none" onchange="loadCSVFiles(this.files)">
-          <div class="info blue" style="margin-top:8px;font-size:11px">読込: <strong id="csv-file">未読み込み</strong></div>
+          <div id="csv-status" style="margin-top:8px;padding:8px 12px;border-radius:6px;background:var(--blue-lt);font-size:11px;display:none"></div>
+          <div class="info blue" style="margin-top:6px;font-size:11px">読込: <strong id="csv-file">未読み込み</strong></div>
           <select id="csv-type" style="display:none"><option value="auto">auto</option></select>
-          <div id="csv-log" style="margin-top:8px;font-size:11px;color:var(--text3);max-height:80px;overflow-y:auto"></div>
+          <div id="csv-log" style="margin-top:8px;font-size:11px;color:var(--text3);max-height:80px;overflow-y:auto;white-space:pre-wrap"></div>
         </div>
         <div class="sec col1">
           <div class="sec-title">データ概要</div>
@@ -1591,6 +1760,45 @@ function renderP0(){
       y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>'¥'+v.toLocaleString()}},
       y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#0d9488',callback:v=>v+'%'}},
     }}});
+
+  /* ── 月次KPIテーブル ── */
+  const tblP0=document.getElementById('tbl-p0-kpi');
+  if(tblP0){
+    const N=v=>Math.round(v||0).toLocaleString('ja-JP');
+    /* calcYoY は "123.4" のような文字列(対前年比%)を返す。差分(±xx%)に変換して表示 */
+    const P=v=>{
+      if(v==null) return '<span style="color:var(--text3)">—</span>';
+      const n=parseFloat(v);
+      const diff=(n-100);
+      if(diff>=0) return '<span style="color:var(--green);font-weight:600">+'+diff.toFixed(1)+'%</span>';
+      return '<span style="color:var(--red);font-weight:600">'+diff.toFixed(1)+'%</span>';
+    };
+    const rows=kpi.map((r,i)=>{
+      return `<tr>
+        <td class="mono" style="font-weight:600">${r['日付'].slice(0,7).replace('-','年')}月</td>
+        <td class="r mono" style="color:var(--blue);font-weight:700">¥${N(r['売上金額'])}</td>
+        <td class="r" style="min-width:60px">${P(revYoY[i])}</td>
+        <td class="r mono">${N(r['アクセス人数'])}</td>
+        <td class="r" style="min-width:60px">${P(accYoY[i])}</td>
+        <td class="r mono">${(r['転換率']||0).toFixed(2)}%</td>
+        <td class="r" style="min-width:60px">${P(cvrYoY[i])}</td>
+        <td class="r mono">¥${N(r['客単価'])}</td>
+        <td class="r" style="min-width:60px">${P(aovYoY[i])}</td>
+      </tr>`;
+    }).join('');
+    tblP0.innerHTML=`<thead><tr>
+      <th style="position:sticky;top:0;z-index:3">年月</th>
+      <th class="r" style="position:sticky;top:0;z-index:3">売上金額</th>
+      <th class="r" style="position:sticky;top:0;z-index:3">売上前年比</th>
+      <th class="r" style="position:sticky;top:0;z-index:3">アクセス人数</th>
+      <th class="r" style="position:sticky;top:0;z-index:3">アクセス前年比</th>
+      <th class="r" style="position:sticky;top:0;z-index:3">転換率</th>
+      <th class="r" style="position:sticky;top:0;z-index:3">転換率前年比</th>
+      <th class="r" style="position:sticky;top:0;z-index:3">客単価</th>
+      <th class="r" style="position:sticky;top:0;z-index:3">客単価前年比</th>
+    </tr></thead><tbody>${rows}</tbody>`;
+    _tblSortInit('tbl-p0-kpi');
+  }
 }
 
 /* ═══ PAGE 1: 新規・既存 ═══ */
@@ -2159,6 +2367,7 @@ function loadXL(file){
       initAllRanges();
       autoFillBrandInputs();
       goTab(0);
+      _p0UpdateBar(file.name);
     }catch(err){
       document.getElementById('dz').className='err';
       document.getElementById('dz-ttl').textContent='読み込み失敗: '+err.message;
@@ -2166,7 +2375,70 @@ function loadXL(file){
   };
   reader.readAsArrayBuffer(file);
 }
+/* ─ pg0 クイックアップロードハンドラ ─ */
+function _p0HandleDrop(files){
+  const fileArr=Array.from(files||[]);
+  if(!fileArr.length)return;
+  const file=fileArr[0];
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='xlsx'||ext==='xlsm'){
+    loadXL(file);
+  } else {
+    // CSV の場合は全ファイルを処理
+    loadCSVFiles(fileArr);
+    // CSV読み込み後もバー更新
+    setTimeout(()=>_p0UpdateBar(file.name),800);
+  }
+}
+function _p0UpdateBar(name){
+  const dz=document.getElementById('p0-dropzone');
+  const bar=document.getElementById('p0-loaded-bar');
+  const nm=document.getElementById('p0-loaded-name');
+  const ct=document.getElementById('p0-loaded-count');
+  if(!dz||!bar)return;
+  const cnt=D.kpi.length;
+  if(cnt>0){
+    dz.style.display='none';
+    bar.style.display='flex';
+    nm.textContent=name||'データ読込済み';
+    ct.textContent='月次KPI '+cnt+'件';
+  } else {
+    dz.style.display='block';
+    bar.style.display='none';
+  }
+}
+
 /* ─ CSVファイル一括読み込み ─ */
+/* ─ データタブ CSV ドロップゾーン ハンドラ ─ */
+function _dzCsvLoad(files){
+  /* FileList は input.value='' 後に無効化されるため、最初にArrayへコピー */
+  const fileArr=Array.from(files||[]);
+  if(!fileArr.length)return;
+  const dz=document.getElementById('dz-csv');
+  const ttl=document.getElementById('csv-ttl');
+  const sub=document.getElementById('csv-sub');
+  const ico=document.getElementById('csv-ico');
+  const st=document.getElementById('csv-status');
+  /* 読み込み中表示 */
+  if(dz){dz.style.borderColor='#1462D4';dz.style.background='#EBF2FF';}
+  if(ttl)ttl.textContent='読み込み中… ('+fileArr.length+'件)';
+  loadCSVFiles(fileArr);
+  /* 読み込み後にUI更新（processCSVText が非同期のため少し待つ） */
+  setTimeout(()=>{
+    const names=fileArr.map(f=>f.name).join('、');
+    if(dz){dz.style.borderColor='#10B981';dz.style.background='#F0FDF4';}
+    if(ico)ico.textContent='✅';
+    if(ttl)ttl.textContent=fileArr.length+'ファイル 読み込み完了';
+    if(sub)sub.textContent=names.length>60?names.slice(0,60)+'…':names;
+    const csvFile=document.getElementById('csv-file');
+    if(csvFile)csvFile.textContent=fileArr.length+'件';
+    if(st){st.style.display='block';st.textContent='✅ '+names;}
+    /* pg0 バーも更新 */
+    if(typeof _p0UpdateBar==='function')_p0UpdateBar(fileArr[0]?.name||'CSV');
+    /* データ概要を再表示 */
+    if(typeof renderP13==='function')renderP13();
+  },800);
+}
 function loadCSVFiles(files){
   if(!files||!files.length)return;
   const log=document.getElementById('csv-log');
@@ -2219,18 +2491,167 @@ function detectCSVType(headers,rows,filename){
 }
 
 function processCSVText(text,name,log){
-  /* 簡易CSVパース → parseWBが取り込める形に */
-  if(log)log.textContent+=(log.textContent?'\n':'')+name+' 読み込み完了';
-  /* CSV種別自動判定して対応するパーサへ */
-  const lines=text.split('\n');
-  const header=lines.slice(0,5).join(',');
-  if(header.includes('キーワード')&&header.includes('インプレッション')){
-    /* RPPキーワードCSV */
-    if(typeof parseRppKwCSV==='function')parseRppKwCSV(text);
-  }else if(header.includes('参照元')){
-    if(typeof parseRefCSV==='function')parseRefCSV(text);
+  /* ── CSV全行パース（簡易）── */
+  function parseCSV(str){
+    /* RFC-4180準拠パーサ：ダブルクォートで囲まれたカンマ・改行を正しく処理 */
+    function splitLine(line){
+      const cols=[];let cur='';let inQ=false;
+      for(let i=0;i<line.length;i++){
+        const c=line[i];
+        if(c==='"'){
+          if(inQ&&line[i+1]==='"'){cur+='"';i++;}
+          else inQ=!inQ;
+        } else if(c===','&&!inQ){cols.push(cur.trim());cur='';}
+        else cur+=c;
+      }
+      cols.push(cur.trim());
+      return cols;
+    }
+    const res=[];const lines=str.split(/\r?\n/);
+    let hi=-1;
+    for(let i=0;i<Math.min(lines.length,15);i++){
+      if(splitLine(lines[i]).filter(Boolean).length>=3){hi=i;break;}
+    }
+    if(hi<0)return{headers:[],rows:[]};
+    const headers=splitLine(lines[hi]).map(h=>h.replace(/^"|"$/g,'').trim());
+    for(let i=hi+1;i<lines.length;i++){
+      const cols=splitLine(lines[i]);
+      if(cols.filter(Boolean).length<2)continue;
+      const row={};headers.forEach((h,j)=>row[h]=cols[j]||'');
+      res.push(row);
+    }
+    return{headers,rows:res};
   }
-  if(typeof renderAll==='function')renderAll();
+  function nv(v){if(v==null||v==='')return 0;const s=String(v).replace(/[,， 　¥￥\$%]/g,'');const n=parseFloat(s);return isNaN(n)?0:n;}
+  function fd(v){if(!v)return'';const s=String(v).trim();if(/^\d{4}-\d{2}/.test(s))return s.slice(0,10);if(/^\d{4}\/\d{2}/.test(s))return s.slice(0,7).replace('/','-')+'-01';if(/^\d{4}年\d{1,2}月/.test(s)){const m=s.match(/(\d{4})年(\d{1,2})月(\d{1,2})?日?/);if(m)return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]||'01').padStart(2,'0');}return s.slice(0,10);}
+
+  const {headers,rows}=parseCSV(text);
+  if(!headers.length){if(log)log.textContent+=(log.textContent?'\n':'')+name+': ヘッダーが見つかりません';return;}
+
+  const type=detectCSVType(headers,rows,name);
+  if(log)log.textContent+=(log.textContent?'\n':'')+name+' ['+( type||'不明')+'] 読み込み完了';
+
+  if(type==='kpi'){
+    const parsed=rows.map(r=>({
+      '日付':fd(r['日付']||r['年月']),
+      '売上金額':nv(r['売上金額']),
+      '売上件数':nv(r['売上件数']),
+      'アクセス人数':nv(r['アクセス人数']||r['訪問者数']),
+      '転換率':nv(r['転換率']||r['CVR']),
+      '客単価':nv(r['客単価']),
+      '新規購入者数':nv(r['新規購入者数']||r['新規']),
+      'リピート購入者数':nv(r['リピート購入者数']||r['リピート']),
+      'クーポン':nv(r['クーポン値引額（店舗）']||r['クーポン値引額(店舗)']||r['クーポン']),
+    })).filter(r=>r['日付']&&r['売上金額']>0);
+    // デバイス列があれば「すべて」で絞り込み
+    const hasDev=rows.some(r=>r['デバイス']);
+    const filtered=hasDev?rows.filter(r=>r['デバイス']==='すべて'||r['デバイス']==='合計'):rows;
+    if(filtered.length>0){
+      const kpi2=filtered.map(r=>({
+        '日付':fd(r['日付']||r['年月']),
+        '売上金額':nv(r['売上金額']),'売上件数':nv(r['売上件数']),
+        'アクセス人数':nv(r['アクセス人数']||r['訪問者数']),
+        '転換率':nv(r['転換率']||r['CVR']),'客単価':nv(r['客単価']),
+        '新規購入者数':nv(r['新規購入者数']||r['新規']),
+        'リピート購入者数':nv(r['リピート購入者数']||r['リピート']),
+        'クーポン':nv(r['クーポン値引額（店舗）']||r['クーポン値引額(店舗)']||r['クーポン']),
+      })).filter(r=>r['日付']&&r['売上金額']>0);
+      // 既存データとマージ（重複日付は上書き）
+      const map={};D.kpi.forEach(r=>{map[r['日付']]=r;});
+      kpi2.forEach(r=>{map[r['日付']]=r;});
+      D.kpi=Object.values(map).sort((a,b)=>a['日付'].localeCompare(b['日付']));
+    } else {
+      const map={};D.kpi.forEach(r=>{map[r['日付']]=r;});
+      parsed.forEach(r=>{map[r['日付']]=r;});
+      D.kpi=Object.values(map).sort((a,b)=>a['日付'].localeCompare(b['日付']));
+    }
+  } else if(type==='ref'){
+    if(typeof parseRefCSV==='function')parseRefCSV(text);
+  } else if(type==='kw'){
+    /* キーワードCSV: 日付(YYYY/M/D) + 検索キーワード + アクセス人数 */
+    const ktot={};const kbm={};const kmt={};
+    rows.forEach(r=>{
+      const raw_date=r['\u65e5\u4ed8']||r['\u5e74\u6708']||r['\u6708']||'';
+      const raw_kw=r['\u691c\u7d22\u30ad\u30fc\u30ef\u30fc\u30c9']||r['\u30ad\u30fc\u30ef\u30fc\u30c9']||r['keyword']||'';
+      const raw_acc=r['\u30a2\u30af\u30bb\u30b9\u4eba\u6570']||r['\u30bb\u30c3\u30b7\u30e7\u30f3\u6570']||r['\u8a2a\u554f\u8005\u6570']||'0';
+      if(!raw_date||!raw_kw)return;
+      const s=String(raw_date).trim();
+      let m='';
+      if(s.indexOf('/')>-1){const pts=s.split('/');m=pts[0]+'-'+String(pts[1]).padStart(2,'0')+'-01';}
+      else if(/^\d{4}-\d{2}/.test(s)){m=s.slice(0,7)+'-01';}
+      else return;
+      const kw=String(raw_kw).trim();
+      const v=nv(raw_acc);
+      ktot[kw]=(ktot[kw]||0)+v;
+      if(!kbm[m])kbm[m]={};
+      if((kbm[m][kw]||0)<v)kbm[m][kw]=v;
+      kmt[m]=(kmt[m]||0)+v;
+    });
+    /* 既存データとマージ */
+    Object.keys(kbm).forEach(m=>{
+      if(!D.kwByMonth[m])D.kwByMonth[m]={};
+      Object.keys(kbm[m]).forEach(kw=>{D.kwByMonth[m][kw]=(D.kwByMonth[m][kw]||0)+kbm[m][kw];});
+      D.kwMonthlyTotal[m]=(D.kwMonthlyTotal[m]||0)+kmt[m];
+    });
+    const allKtot={};
+    Object.values(D.kwByMonth).forEach(mo=>Object.keys(mo).forEach(kw=>allKtot[kw]=(allKtot[kw]||0)+mo[kw]));
+    D.topKws=Object.entries(allKtot).sort((a,b)=>b[1]-a[1]).slice(0,40).map(([k])=>k);
+  } else if(type==='rpp'){
+    const parsed=rows.map(r=>({
+      '日付':fd(r['日付']||r['年月']),
+      '有効予算':nv(r['有効予算']),'実績額':nv(r['実績額(合計)'])||nv(r['実績額'])||0,
+      'CPC':nv(r['CPC実績(合計)'])||nv(r['CPC実績'])||nv(r['CPC'])||0,
+      'クリック数':nv(r['クリック数(合計)'])||nv(r['クリック数'])||0,
+      'ROAS':nv(r['ROAS(合計720時間)(%)'])||nv(r['ROAS(%)'])||nv(r['ROAS'])||0,
+      'CVR':nv(r['CVR(合計720時間)(%)'])||nv(r['CVR(%)'])||nv(r['CVR'])||0,
+      '消化率':nv(r['消化率(%)'])||nv(r['消化率'])||0,
+    })).filter(r=>r['日付']);
+    const map={};D.rpp.forEach(r=>{map[r['日付']]=r;});
+    parsed.forEach(r=>{map[r['日付']]=r;});
+    D.rpp=Object.values(map).sort((a,b)=>a['日付'].localeCompare(b['日付']));
+  } else if(type==='rppKw'||( headers.join(',').includes('キーワード')&&headers.join(',').includes('インプレッション'))){
+    if(typeof parseRppKwCSV==='function')parseRppKwCSV(text);
+  } else if(type==='rppItem'){
+    // RPP商品別CSVは parseWBに委ねる（構造複雑）
+  } else if(type==='mail'){
+    const parsed=rows.map(r=>({
+      '年月':fd(r['年月']||r['月']),'送信数':nv(r['送信数']),'開封率':nv(r['開封率(%)'])||nv(r['開封率']),
+      '送客数':nv(r['送客数']),'転換数':nv(r['転換数']),'売上':nv(r['売上']),
+    })).filter(r=>r['年月']);
+    if(parsed.length)D.mail=parsed;
+  } else if(type==='line'){
+    const parsed=rows.map(r=>({
+      '月':fd(r['月']||r['年月']),'訪問者数':nv(r['訪問者数']),
+      '転換率':nv(r['転換率']),'売上':nv(r['売上']),'転換数':nv(r['転換数']),
+    })).filter(r=>r['月']&&r['売上']>0);
+    if(parsed.length)D.line=parsed;
+  } else if(type==='aff'){
+    const map={};
+    rows.forEach(r=>{
+      const k=fd(r['年月']||r['月']);if(!k)return;
+      if(!map[k])map[k]={年月:k,クリック数:0,売上件数:0,売上金額:0,成果報酬:0};
+      map[k].クリック数+=nv(r['クリック数']);map[k].売上件数+=nv(r['売上件数']);
+      map[k].売上金額+=nv(r['売上金額']);map[k].成果報酬+=nv(r['成果報酬']);
+    });
+    const parsed=Object.values(map).sort((a,b)=>a.年月.localeCompare(b.年月));
+    if(parsed.length)D.affiliate=parsed;
+  } else if(type==='newExist'){
+    const parsed=rows.map(r=>({
+      '日付':fd(r['日付']||r['年月']||r['月']),'売上':nv(r['売上']),
+      '新規':nv(r['新規']),'1回':nv(r['1回']),'2回':nv(r['2回']),'3回':nv(r['3回']),'4回以上':nv(r['4回以上']),
+    })).filter(r=>r['日付']&&r['売上']>0);
+    if(parsed.length)D.newExisting=parsed;
+  }
+
+  /* 全体再描画 */
+  if(typeof renderP13==='function')renderP13();          /* データ概要テーブル更新 */
+  if(typeof initAllRanges==='function')initAllRanges();  /* レンジスライダー再初期化 */
+  /* KWデータが増えたらKWタブのセレクタも初期化 */
+  if(Object.keys(D.kwByMonth).length>0&&typeof initKwControls==='function')initKwControls();
+  /* 現在タブを再描画（データ読込タブ以外） */
+  if(typeof curPg!=='undefined'&&curPg!==16&&typeof renderAll==='function')renderAll();
+  /* pg0 アップロードバー更新 */
+  setTimeout(()=>{if(typeof _p0UpdateBar==='function')_p0UpdateBar(name);},300);
 }
 
 function parseWB(wb){
@@ -3847,7 +4268,8 @@ function selectRppKw(kw,rowEl){
   document.querySelectorAll('.prod-row').forEach(r=>r.classList.remove('ri-sel'));
   if(rowEl)rowEl.classList.add('ri-sel');
   const el=document.getElementById('rpp-kw-selected');
-  if(el){const[_id,_kw]=kw.split('||');el.textContent=(_id?_id+' / ':'')+(_kw||kw);}
+  const [_id,_kw]=kw.split('||');
+  if(el)el.textContent=(_id?_id+' / ':'')+(_kw||kw);
   renderRppKwCharts(kw);
 }
 
@@ -4244,6 +4666,19 @@ function sumRows(rows){
 let _rppCatSel=null;
 const _rppCatYrSel=new Set();
 
+/* RPPカテゴリ：基準年月変更時に比較年月を前年同月に自動同期 */
+function syncRppCatCmp(){
+  const base=document.getElementById('rppcat-base');
+  const cmp=document.getElementById('rppcat-cmp');
+  if(!base||!cmp)return;
+  const ym=base.value;
+  if(!ym)return;
+  const prev=String(parseInt(ym.slice(0,4))-1)+ym.slice(4);
+  /* セレクタに前年同月の選択肢があれば自動セット */
+  const opts=[...cmp.options].map(o=>o.value);
+  if(opts.includes(prev))cmp.value=prev;
+}
+
 function initRppCat(){
   const items=D.rppItem||[];
   if(!items.length)return;
@@ -4253,7 +4688,14 @@ function initRppCat(){
   const base=document.getElementById('rppcat-base');
   const cmp=document.getElementById('rppcat-cmp');
   if(base&&!base._built){base._built=true;base.innerHTML=opts;base.value=months[months.length-1];}
-  /* 比較年月セレクタは廃止 */
+  /* 比較年月セレクタ：毎回再構築（データ読込後の再訪問対応） */
+  if(cmp){
+    cmp.innerHTML=opts;
+    const baseYM=months[months.length-1];
+    const prevYM=String(parseInt(baseYM.slice(0,4))-1)+baseYM.slice(4);
+    cmp.value=months.includes(prevYM)?prevYM:months[0];
+    cmp._built=true;
+  }
   const c=document.getElementById('rppcat-yr-btns');
   if(c&&!c._built){
     c._built=true;
@@ -4276,8 +4718,11 @@ function renderRppCat(){
   const items=D.rppItem||[];const pa=D.prodAnalysis||[];
   if(!items.length){const tb=document.getElementById('tbl-rpp-cat');if(tb)tb.innerHTML='<tr><td colspan="19" style="text-align:center;padding:28px"><div style="color:var(--text3);margin-bottom:8px">RPP Itemシートを含むXLSXを読み込んでください</div><button onclick="goTab(19)" style="padding:5px 14px;border-radius:6px;border:1px solid var(--blue);background:var(--blue-lt);color:var(--blue);font-size:11px;cursor:pointer;font-family:inherit">→ データ読込タブへ</button></td></tr>';return;}
   const baseYM=document.getElementById('rppcat-base')?.value||'';
-  const cmpYM=document.getElementById('rppcat-cmp')?.value||'';
   if(!baseYM)return;
+  /* 比較年月：セレクタ値があればそれを使う。なければ前年同月にフォールバック */
+  const _cmpSel=document.getElementById('rppcat-cmp');
+  const _cmpFallback=String(parseInt(baseYM.slice(0,4))-1)+baseYM.slice(4);
+  const cmpYM=_cmpSel?.value||_cmpFallback;
   const catMap={};pa.forEach(r=>{if(r['管理番号']&&r['カテゴリ'])catMap[r['管理番号']]=r['カテゴリ'];});
   function sumByCat(ym){
     const map={};
@@ -5870,6 +6315,329 @@ function renderBrandKw(){
   }).join('');
 }
 
+
+/* ═══ PAGE 23: RPPキーワード（一般・指名キーワード別） ═══ */
+let _rk23SelId=null, _rk23SelProds=null;
+
+/* ── 商品チェックボックス構築 ── */
+function _rk23BuildProdCheckboxes(items){
+  const wrap=document.getElementById('kw23-prod-checkboxes');
+  if(!wrap)return;
+  const terms=(document.getElementById('kw23-brand-terms')?.value||'').split(',').map(t=>t.trim().toLowerCase()).filter(Boolean);
+  const isNamed=kw=>terms.length&&terms.some(t=>(kw||'').toLowerCase().includes(t));
+  const prods=[...new Set(items.filter(r=>!isNamed(r['キーワード']||'')).map(r=>r['管理番号']||'').filter(Boolean))].sort();
+  if(!prods.length){wrap.innerHTML='<span style="font-size:11px;padding:4px;color:var(--text3)">データなし</span>';return;}
+  if(wrap._prods===prods.join(','))return;
+  wrap._prods=prods.join(',');
+  _rk23SelProds=null;
+  /* 縦1列のチェックボックスリスト */
+  wrap.innerHTML=prods.map(id=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;font-size:12px;color:var(--text);transition:background .1s" onmouseover="this.style.background='#EFF6FF'" onmouseout="this.style.background='transparent'">
+    <input type="checkbox" class="rk23-prod-cb" value="${id}" checked style="accent-color:#3B82F6;width:14px;height:14px;flex-shrink:0" onchange="_rk23OnProdChange()">
+    <span>${id}</span></label>`).join('');
+  _rk23UpdateTriggerLabel();
+}
+
+function _rk23ToggleProdDropdown(){
+  const panel=document.getElementById('kw23-prod-panel');
+  const arrow=document.getElementById('kw23-prod-trigger-arrow');
+  if(!panel)return;
+  const isOpen=panel.style.display!=='none';
+  panel.style.display=isOpen?'none':'block';
+  if(arrow)arrow.textContent=isOpen?'▼':'▲';
+  if(!isOpen){
+    /* パネル外クリックで閉じる */
+    setTimeout(()=>{
+      document.addEventListener('click',_rk23PanelOutsideClick,{once:true});
+    },0);
+  }
+}
+
+function _rk23PanelOutsideClick(e){
+  const wrap=document.getElementById('kw23-prod-dropdown-wrap');
+  if(wrap&&!wrap.contains(e.target)){
+    const panel=document.getElementById('kw23-prod-panel');
+    const arrow=document.getElementById('kw23-prod-trigger-arrow');
+    if(panel)panel.style.display='none';
+    if(arrow)arrow.textContent='▼';
+  } else {
+    /* パネル内クリックならイベント再登録 */
+    setTimeout(()=>{document.addEventListener('click',_rk23PanelOutsideClick,{once:true});},0);
+  }
+}
+
+function _rk23UpdateTriggerLabel(){
+  const cbs=[...document.querySelectorAll('.rk23-prod-cb')];
+  const checked=cbs.filter(cb=>cb.checked);
+  const lbl=document.getElementById('kw23-prod-trigger-label');
+  if(!lbl)return;
+  if(!cbs.length)lbl.textContent='商品を選択…';
+  else if(checked.length===cbs.length)lbl.textContent='全商品（'+cbs.length+'件）';
+  else if(checked.length===0)lbl.textContent='未選択';
+  else lbl.textContent=checked.length+'件 選択中 / 全'+cbs.length+'件';
+}
+function _rk23OnProdChange(){
+  const cbs=[...document.querySelectorAll('.rk23-prod-cb')];
+  const checked=cbs.filter(cb=>cb.checked).map(cb=>cb.value);
+  _rk23SelProds=(checked.length===cbs.length)?null:new Set(checked);
+  _rk23UpdateTriggerLabel();
+  renderRppKw23();
+}
+function _rk23SelectAllProds(state){
+  document.querySelectorAll('.rk23-prod-cb').forEach(cb=>{cb.checked=state;});
+  _rk23SelProds=state?null:new Set();
+  _rk23UpdateTriggerLabel();
+  renderRppKw23();
+}
+
+/* ── 指名分類 ── */
+function _rk23IsNamed(kw){
+  const terms=(document.getElementById('kw23-brand-terms')?.value||'').split(',').map(t=>t.trim().toLowerCase()).filter(Boolean);
+  if(!terms.length)return false;
+  return terms.some(t=>(kw||'').toLowerCase().includes(t));
+}
+
+function initRppKwSel23(){
+  const items=D.rppKw||[];
+  const months=[...new Set(items.map(r=>(r['日付']||'').slice(0,7)))].sort();
+  if(!months.length)return;
+  const years=[...new Set(months.map(m=>m.slice(0,4)))].sort();
+  const mNums=[...new Set(months.map(m=>m.slice(5,7)))].sort();
+  const yOpts=years.map(y=>`<option value="${y}">${y}年</option>`).join('');
+  const mOpts=mNums.map(m=>`<option value="${m}">${parseInt(m)}月</option>`).join('');
+  ['kw23-base-year','kw23-cmp-year'].forEach(id=>{
+    const el=document.getElementById(id);if(el){el.innerHTML=yOpts;el.value=(id.includes('cmp')?years[Math.max(0,years.length-2)]:years[years.length-1]);}
+  });
+  ['kw23-base-month','kw23-cmp-month'].forEach(id=>{
+    const el=document.getElementById(id);if(el){el.innerHTML=mOpts;el.value=months[months.length-1].slice(5,7);}
+  });
+}
+
+function renderRppKw23(){
+  const items=D.rppKw||[];
+  const tb=document.getElementById('tbl-rpp-kw23');
+  if(!items.length){if(tb)tb.innerHTML='<tr><td colspan="21" style="text-align:center;color:var(--text3);padding:28px">RPP Keywordシートを含むXLSXを読み込んでください</td></tr>';return;}
+  _rk23BuildProdCheckboxes(items);
+
+  const selY=document.getElementById('kw23-base-year')?.value||'';
+  const selM=document.getElementById('kw23-base-month')?.value||'';
+  const cmpY=document.getElementById('kw23-cmp-year')?.value||String(parseInt(selY)-1);
+  const cmpM=document.getElementById('kw23-cmp-month')?.value||selM;
+  const selKey=selY+'-'+selM, yoyKey=cmpY+'-'+cmpM;
+  const _matchProd=id=>!_rk23SelProds||_rk23SelProds.has(id||'');
+
+  /* ── ヘッダー ── */
+  const h1=document.getElementById('kw23-thead-r1'), h2=document.getElementById('kw23-thead-r2');
+  const GL='border-left:2px solid rgba(255,255,255,.4)';
+  const GH='text-align:center;border-bottom:1px solid rgba(255,255,255,.25)';
+  const ST='position:sticky;top:28px;z-index:2;background:var(--blue)';
+  if(h1)h1.innerHTML=`<th rowspan="2" style="vertical-align:middle;position:sticky;top:0;left:0;z-index:6;background:var(--blue)">商品管理番号</th>
+    <th rowspan="2" style="vertical-align:middle;position:sticky;top:0;z-index:3">キーワード</th>
+    <th rowspan="2" style="vertical-align:middle;position:sticky;top:0;z-index:3;min-width:52px">分類</th>
+    <th colspan="3" style="${GH};${GL}">クリック数</th><th colspan="3" style="${GH};${GL}">CVR</th>
+    <th colspan="3" style="${GH};${GL}">CPC</th><th colspan="3" style="${GH};${GL}">実績額</th>
+    <th colspan="3" style="${GH};${GL}">売上(720h)</th><th colspan="3" style="${GH};${GL}">ROAS</th>`;
+  if(h2)h2.innerHTML=`<th class="r" style="${GL};${ST}">基準</th><th class="r" style="${ST}">比較</th><th class="r" style="${ST}">比率</th>`.repeat(6);
+
+  /* ── 月集計 ── */
+  const avg=a=>a.length?a.reduce((s,v)=>s+v,0)/a.length:0;
+  function agg(key){
+    const map={};
+    items.filter(r=>(r['日付']||'').slice(0,7)===key).forEach(r=>{
+      const id=r['管理番号']||'',kw=r['キーワード']||'',k=id+'||'+kw;
+      if(!_matchProd(id))return;
+      if(!map[k])map[k]={k,id,kw,cl:0,am:0,sl:0,_r:[],_c:[],_p:[]};
+      map[k].cl+=r['クリック数']||0;map[k].am+=r['実績額']||0;map[k].sl+=r['売上']||0;
+      if(r['ROAS']>0)map[k]._r.push(r['ROAS']);if(r['CVR']>0)map[k]._c.push(r['CVR']);if(r['CPC']>0)map[k]._p.push(r['CPC']);
+    });
+    return Object.fromEntries(Object.values(map).map(s=>[s.k,{k:s.k,id:s.id,kw:s.kw,cl:s.cl,am:s.am,sl:s.sl,ROAS:avg(s._r),CVR:avg(s._c),CPC:avg(s._p)}]));
+  }
+  const cur=agg(selKey),yoy=agg(yoyKey);
+  const N=v=>Math.round(v||0).toLocaleString('ja-JP'),P=v=>(v||0).toFixed(2)+'%';
+  const ratio=(c,p)=>(p&&p>0)?c/p*100:null,fP=r=>_yoySpan(r);
+  const GL3='border-left:2px solid rgba(0,0,0,.08)';
+
+  /* ── 1行ビルド（個別KW） ── */
+  function buildRow(p,isBranded){
+    const y=yoy[p.k]||null;
+    const safeK=p.k.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const color=isBranded?'#F59E0B':'#3B82F6',label=isBranded?'指名':'一般',sel=(_rk23SelId===p.k);
+    return '<tr class="rk23-row'+(sel?' ri-sel':'')+'" onclick="selectRkRow23(\''+safeK+'\',this)" style="cursor:pointer">'
+      +'<td class="mono" style="font-size:11px;position:sticky;left:0;background:#fff;z-index:2">'+(p.id||'—')+'</td>'
+      +'<td class="mono" style="font-size:11px">'+p.kw+'</td>'
+      +'<td style="text-align:center"><span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:'+color+'22;color:'+color+'">'+label+'</span></td>'
+      +_rk23Cells(p,y,GL3,N,P,fP,ratio);
+  }
+
+  /* ── 集計行ビルド（共通） ── */
+  function buildAggRow(prods,color,label,uid,typeKey){
+    const tot={cl:0,am:0,sl:0,_r:[],_c:[],_p:[]};
+    prods.forEach(p=>{tot.cl+=p.cl;tot.am+=p.am;tot.sl+=p.sl;if(p.ROAS>0)tot._r.push(p.ROAS);if(p.CVR>0)tot._c.push(p.CVR);if(p.CPC>0)tot._p.push(p.CPC);});
+    const yTot={cl:0,am:0,sl:0,_r:[],_c:[],_p:[],has:false};
+    prods.forEach(p=>{const y=yoy[p.k];if(!y)return;yTot.has=true;yTot.cl+=y.cl;yTot.am+=y.am;yTot.sl+=y.sl;if(y.ROAS>0)yTot._r.push(y.ROAS);if(y.CVR>0)yTot._c.push(y.CVR);if(y.CPC>0)yTot._p.push(y.CPC);});
+    const c={cl:tot.cl,am:tot.am,sl:tot.sl,ROAS:avg(tot._r),CVR:avg(tot._c),CPC:avg(tot._p)};
+    const y=yTot.has?{cl:yTot.cl,am:yTot.am,sl:yTot.sl,ROAS:avg(yTot._r),CVR:avg(yTot._c),CPC:avg(yTot._p)}:null;
+    const sel=(_rk23SelId==='__agg__'+typeKey);
+    return '<tr class="rk23-row'+(sel?' ri-sel':'')+'" onclick="_rk23ClickAgg(\''+typeKey+'\',\''+uid+'\',this)" style="cursor:pointer;background:'+color+'0D;font-weight:600">'
+      +'<td class="mono" style="font-size:11px;position:sticky;left:0;background:'+color+'0D;z-index:2;color:'+color+'">合計</td>'
+      +'<td class="mono" style="font-size:12px;color:'+color+';font-weight:700">'+label+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">'+prods.length+'KW</span>'
+        +'<span id="'+uid+'-icon" style="margin-left:8px;font-size:10px;color:var(--text3)">▶ 内訳を見る</span></td>'
+      +'<td></td>'
+      +_rk23Cells(c,y,GL3,N,P,fP,ratio);
+  }
+
+  /* ── セル共通 ── */
+  function _rk23Cells(c,y,gl,n,p,fp,rat){
+    return ''
+      +'<td class="r mono" style="'+gl+';font-size:13px">'+n(c.cl)+'</td><td class="r mono" style="font-size:11px;color:var(--text3)">'+(y?n(y.cl):'—')+'</td><td class="r" style="font-size:11px">'+fp(rat(c.cl,y?.cl))+'</td>'
+      +'<td class="r mono" style="'+gl+';font-size:13px">'+p(c.CVR)+'</td><td class="r mono" style="font-size:11px;color:var(--text3)">'+(y?p(y.CVR):'—')+'</td><td class="r" style="font-size:11px">'+fp(rat(c.CVR,y?.CVR))+'</td>'
+      +'<td class="r mono" style="'+gl+';font-size:13px">'+n(c.CPC)+'</td><td class="r mono" style="font-size:11px;color:var(--text3)">'+(y?n(y.CPC):'—')+'</td><td class="r" style="font-size:11px">'+fp(rat(c.CPC,y?.CPC))+'</td>'
+      +'<td class="r mono" style="'+gl+';font-size:13px">'+n(c.am)+'</td><td class="r mono" style="font-size:11px;color:var(--text3)">'+(y?n(y.am):'—')+'</td><td class="r" style="font-size:11px">'+fp(rat(c.am,y?.am))+'</td>'
+      +'<td class="r mono" style="'+gl+';font-size:13px;color:var(--blue);font-weight:700">'+n(c.sl)+'</td><td class="r mono" style="font-size:11px;color:var(--text3)">'+(y?n(y.sl):'—')+'</td><td class="r" style="font-size:11px">'+fp(rat(c.sl,y?.sl))+'</td>'
+      +'<td class="r mono" style="'+gl+';font-size:13px;color:var(--green);font-weight:700">'+n(c.ROAS)+'%</td><td class="r mono" style="font-size:11px;color:var(--text3)">'+(y?n(y.ROAS)+'%':'—')+'</td><td class="r" style="font-size:11px">'+fp(rat(c.ROAS,y?.ROAS))+'</td>';
+  }
+
+  /* ── 仕分け ── */
+  const general=Object.values(cur).filter(r=>!_rk23IsNamed(r.kw)&&_matchProd(r.id)).sort((a,b)=>b.sl-a.sl);
+  const branded=Object.values(cur).filter(r=>_rk23IsNamed(r.kw)).sort((a,b)=>b.sl-a.sl);
+
+  function secHeader(label,color,count){
+    return '<tr style="background:'+color+'11"><td colspan="21" style="padding:6px 14px;font-size:11px;font-weight:700;color:'+color+';border-top:2px solid '+color+'40">'
+      +'<span style="display:inline-block;width:10px;height:10px;background:'+color+';border-radius:2px;margin-right:6px;vertical-align:middle"></span>'
+      +label+'<span style="font-weight:400;color:var(--text3);margin-left:6px">'+count+'件</span></td></tr>';
+  }
+
+  const rows=[];
+  /* 一般 */
+  rows.push(secHeader('一般キーワード','#3B82F6',general.length));
+  if(general.length){
+    rows.push(buildAggRow(general,'#3B82F6','一般キーワード','gen23acc','general'));
+    general.forEach(p=>rows.push(
+      buildRow(p,false).replace('<tr class="rk23-row','<tr data-acc="gen23acc" class="rk23-gen-detail rk23-row').replace('style="cursor:pointer"','style="cursor:pointer;display:none;background:#EFF6FF"')
+    ));
+  } else rows.push('<tr><td colspan="21" style="padding:10px 20px;color:var(--text3);font-size:12px">指名語句を設定してください</td></tr>');
+
+  /* 指名 */
+  rows.push(secHeader('指名キーワード','#F59E0B',branded.length));
+  if(branded.length){
+    rows.push(buildAggRow(branded,'#F59E0B','指名キーワード','brd23acc','branded'));
+    branded.forEach(p=>rows.push(
+      buildRow(p,true).replace('<tr class="rk23-row','<tr data-acc="brd23acc" class="rk23-brd-detail rk23-row').replace('style="cursor:pointer"','style="cursor:pointer;display:none;background:#FFFBEB"')
+    ));
+  } else rows.push('<tr><td colspan="21" style="padding:10px 20px;color:var(--text3);font-size:12px">指名語句を設定してください</td></tr>');
+
+  if(tb)tb.innerHTML=rows.join('');
+  _tblSortInit('tbl-rpp-kw23-wrap');
+}
+
+/* ── アコーディオン開閉 ── */
+function _rk23ToggleGen(uid){
+  const rows=document.querySelectorAll('tr[data-acc="'+uid+'"]');
+  const icon=document.getElementById(uid+'-icon');
+  if(!rows.length)return;
+  const isOpen=(rows[0].style.display!=='none');
+  rows.forEach(r=>{r.style.display=isOpen?'none':'table-row';});
+  if(icon)icon.textContent=isOpen?'▶ 内訳を見る':'▼ 閉じる';
+}
+
+/* ── 合計行クリック → アコーディオン + グラフ更新 ── */
+function _rk23ClickAgg(typeKey,uid,rowEl){
+  _rk23ToggleGen(uid);
+  _rk23SelId='__agg__'+typeKey;
+  document.querySelectorAll('.rk23-row').forEach(r=>r.classList.remove('ri-sel'));
+  if(rowEl)rowEl.classList.add('ri-sel');
+  const label=document.getElementById('rk23-chart-label');
+  if(label)label.textContent=(typeKey==='general'?'一般':'指名')+'キーワード 合計';
+  /* 集計データで8チャート */
+  const items=D.rppKw||[];
+  const isNamed=kw=>_rk23IsNamed(kw);
+  const matchProd=id=>!_rk23SelProds||_rk23SelProds.has(id||'');
+  const src=items.filter(r=>{
+    const named=isNamed(r['キーワード']||'');
+    if(typeKey==='general')return !named&&matchProd(r['管理番号']||'');
+    return named;
+  });
+  _rk23DrawAggCharts(src, typeKey==='general'?'一般合計':'指名合計');
+}
+
+/* ── 個別KW行クリック ── */
+function selectRkRow23(kw,rowEl){
+  _rk23SelId=kw;
+  document.querySelectorAll('.rk23-row').forEach(r=>r.classList.remove('ri-sel'));
+  if(rowEl)rowEl.classList.add('ri-sel');
+  const [_id,_kw]=kw.split('||');
+  const label=document.getElementById('rk23-chart-label');
+  if(label)label.textContent=(_id?_id+' / ':'')+(_kw||kw);
+  _rk23DrawCharts(kw);
+}
+
+/* ── 集計データで8チャート描画 ── */
+function _rk23DrawAggCharts(src, legendLabel){
+  const avg=a=>a.length?a.reduce((s,v)=>s+v,0)/a.length:0;
+  /* 月別集計 */
+  const byM={};
+  src.forEach(r=>{
+    const m=(r['日付']||'').slice(0,7);if(!m)return;
+    if(!byM[m])byM[m]={sl:0,am:0,cl:0,_r:[],_c:[],_p:[],_cpa:[]};
+    const o=byM[m];
+    o.sl+=r['売上']||0;o.am+=r['実績額']||0;o.cl+=r['クリック数']||0;
+    if(r['ROAS']>0)o._r.push(r['ROAS']);if(r['CVR']>0)o._c.push(r['CVR']);if(r['CPC']>0)o._p.push(r['CPC']);
+    if(r['注文獲得単価']>0)o._cpa.push(r['注文獲得単価']);
+  });
+  const months=Object.keys(byM).sort();
+  const labels=months.map(m=>m.slice(5)+'月');
+  const color='#1462D4';
+  function mkL(id,data,cb,fmt,suf){
+    mk(id,{type:'line',data:{labels,datasets:[{label:legendLabel,data,borderColor:cb||color,borderWidth:2.5,pointRadius:3,fill:true,backgroundColor:(cb||color)+'18',tension:.35,spanGaps:true}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TTP,callbacks:{label:c=>legendLabel+'：'+fmt(c.parsed.y)+(suf||'')}}},
+        scales:{x:{grid:{display:false},ticks:{color:'#8696B5',font:{size:9}},border:{display:false}},
+                y:{grid:GR,border:{display:false},ticks:{color:'#8696B5',font:{size:9},callback:v=>fmt(v)+(suf||'')}}}}});
+  }
+  const fN=v=>Math.round(v).toLocaleString('ja-JP');
+  mkL('rk23-kw-rev',  months.map(m=>byM[m].sl),  '#1462D4', fN);
+  mkL('rk23-kw-roas', months.map(m=>avg(byM[m]._r)), '#10B981', v=>Math.round(v),'%');
+  mkL('rk23-kw-cost', months.map(m=>byM[m].am),  '#EF4444', fN);
+  mkL('rk23-kw-cpa',  months.map(m=>avg(byM[m]._cpa)), '#F59E0B', fN);
+  mkL('rk23-kw-click',months.map(m=>byM[m].cl),  '#6366F1', fN);
+  mkL('rk23-kw-ctr',  months.map(m=>avg(byM[m]._c.map((_,i,a)=>a[i]>0?1:0))), '#8B5CF6', v=>v.toFixed(2),'%');
+  mkL('rk23-kw-cvr',  months.map(m=>avg(byM[m]._c)), '#0EA5E9', v=>v.toFixed(2),'%');
+  mkL('rk23-kw-cpc',  months.map(m=>avg(byM[m]._p)), '#F59E0B', fN);
+  const el=document.getElementById('rk23-kw-legend');
+  if(el)el.innerHTML='<div style="display:flex;align-items:center;gap:5px"><span style="width:20px;height:2px;background:'+color+';display:inline-block;border-radius:2px"></span><span>'+legendLabel+'</span></div>';
+}
+
+/* ── 個別KW 8チャート（既存ロジック流用） ── */
+function _rk23DrawCharts(kw){
+  const [_id,_kw]=kw.split('||');
+  const allItems=(D.rppKw||[]).filter(r=>{
+    if(_id&&r['管理番号']!==_id)return false;
+    if(_kw&&r['キーワード']!==_kw)return false;
+    return true;
+  });
+  if(!allItems.length)return;
+  const byY={};
+  allItems.forEach(r=>{
+    const y=r.日付.slice(0,4),mo=parseInt(r.日付.slice(5,7))-1;
+    if(!byY[y])byY[y]=Array(12).fill(null);
+    if(!byY[y][mo])byY[y][mo]={sl:0,am:0,cl:0,ROAS:0,CVR:0,CPC:0,CTR:0,cpa:0,_n:0};
+    const o=byY[y][mo];
+    o.sl+=r.売上||0;o.am+=r.実績額||0;o.cl+=r.クリック数||0;
+    o.ROAS+=r.ROAS||0;o.CVR+=r.CVR||0;o.CPC+=r.CPC||0;o.CTR+=r.CTR||0;o.cpa+=r.注文獲得単価||0;o._n++;
+  });
+  const years=Object.keys(byY).sort();
+  years.forEach(y=>byY[y].forEach(o=>{if(o&&o._n>1){o.ROAS/=o._n;o.CVR/=o._n;o.CPC/=o._n;o.CTR/=o._n;o.cpa/=o._n;}}));
+  function rkL(id,key,fmt,suf){
+    const ds=years.map(y=>{const c=_riColor(y,years);return{label:y,data:Array.from({length:12},(_,mo)=>byY[y][mo]?byY[y][mo][key]:null),borderColor:c.border,borderWidth:c.bw,pointRadius:c.pt,fill:false,tension:.35,spanGaps:true};});
+    mk(id,{type:'line',data:{labels:MONTHS,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TTP,callbacks:{label:ctx=>' '+ctx.dataset.label+'：'+fmt(ctx.parsed.y)+(suf||'')}}},scales:{x:{grid:{display:false},ticks:{color:'#8696B5',font:{size:9}},border:{display:false}},y:{grid:GR,border:{display:false},ticks:{color:'#8696B5',font:{size:9},callback:v=>fmt(v)+(suf||'')}}}}});
+  }
+  const fN=v=>Math.round(v).toLocaleString('ja-JP');
+  rkL('rk23-kw-rev','sl',fN);rkL('rk23-kw-roas','ROAS',fN,'%');rkL('rk23-kw-cost','am',fN);rkL('rk23-kw-cpa','cpa',fN);rkL('rk23-kw-click','cl',fN);rkL('rk23-kw-ctr','CTR',v=>v.toFixed(2),'%');rkL('rk23-kw-cvr','CVR',v=>v.toFixed(2),'%');rkL('rk23-kw-cpc','CPC',fN);
+  const sorted=[...years].sort();const ly=sorted[sorted.length-1],py=sorted[sorted.length-2]||'';
+  const el=document.getElementById('rk23-kw-legend');
+  if(el)el.innerHTML=years.map(y=>{const c=_riColor(y,years);const lbl=y===ly?y+'(今年)':y===py?y+'(昨年)':y;return'<div style="display:flex;align-items:center;gap:5px"><span style="width:20px;height:'+c.bw+'px;background:'+c.border+';display:inline-block;border-radius:2px"></span><span>'+lbl+'</span></div>';}).join('');
+}
+
+
+
 const RENDERS=[
   ()=>{if(typeof renderP0==='function')renderP0();},
   ()=>{if(typeof renderP1==='function')renderP1();},
@@ -5894,6 +6662,7 @@ const RENDERS=[
   ()=>{/* index20: 空 */},
   ()=>{if(typeof initRppItemType==='function')initRppItemType();if(typeof renderRppItemType==='function')renderRppItemType();},
   ()=>{if(typeof initBrandKw==='function')initBrandKw();if(typeof renderBrandKw==='function')renderBrandKw();},
+  ()=>{if(typeof initRppKwSel23==='function')initRppKwSel23();if(typeof renderRppKw23==='function')renderRppKw23();},
 ];
 let curPg=0;
 
